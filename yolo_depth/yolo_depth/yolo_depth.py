@@ -7,7 +7,7 @@ import numpy as np
 import matplotlib.pyplot as plt
 from rclpy.node import Node
 import cv2
-from sensor_msgs.msg import Image
+from sensor_msgs.msg import Image, PointCloud2
 from realsense2_camera_msgs.msg._rgbd import RGBD
 from cv_bridge import CvBridge, CvBridgeError
 from ultralytics import YOLO
@@ -26,7 +26,9 @@ class Cam_YOLOdepth(Node):    # create node that detect yolo
     def __init__(self):
        super().__init__("yolo_depth_node") 
 
-       self.model=YOLO('yolov8n.pt')    #create yolo nano model 
+       self.model=YOLO('yolov8m.pt')    #create yolo nano model 
+       self.model.to('cuda')
+
        self.bridge = CvBridge()         #define cvbrige
        self.current_angle = 90
 
@@ -35,6 +37,7 @@ class Cam_YOLOdepth(Node):    # create node that detect yolo
        self.angle_pub= self.create_publisher(Float64 , "/Camera_Angle", 1)      #create publisher that publishes the the angle the moter needs to move to
 
        self.image_sub = self.create_subscription(RGBD,"/camera/camera/rgbd",self.callback, 1 )  #create subcriber that retures information to the camera
+
 
        
     def callback(self, D_image: RGBD):
@@ -90,10 +93,11 @@ class Cam_YOLOdepth(Node):    # create node that detect yolo
              text= class_name + str(confidence)    #conbine class name and confidance level
              
              #print infomation:
-             print("class number and type:",class_num,",", class_name," , " ," depth: ", central_depth)
-             print ("cordinates:" ,cords)
-             print("center:" , center)
-             print("confidence:", confidence)
+            
+            #  print("class number and type:",class_num,",", class_name," , " ," depth: ", central_depth)
+            #  print ("cordinates:" ,cords)
+            #  print("center:" , center)
+            #  print("confidence:", confidence)
 
              if class_num ==0 : #if finds a person
 
@@ -105,11 +109,11 @@ class Cam_YOLOdepth(Node):    # create node that detect yolo
                     for j in range(int(cords[3] - cords[1])):
                      pixel_dist_from_frame_center= np.sqrt((frame_center[0]- int(cords[0]) + i - 1)**2 + (frame_center[1] - int(cords[1]) + j -1)**2)
                      depth_coor = cv_depth[int(cords[0]) + i - 1 , int(cords[1]) + j - 1]
-                     if depth_coor > 0: #ignore depths below 0
+                     if depth_coor > 0: # and depth_coor > pixel_dist_from_frame_center: #ignore depths below 0
                          x=int(cords[0]) + i - 1
                          y=int(cords[1]) + j - 1
                          z= np.sqrt(depth_coor**2 - pixel_dist_from_frame_center**2)
- #                        pc_depth.append([z]) # only depths of aray
+                         #pc_depth.append([z]) # only depths of aray
                          pc_total.append([x , y , z])                       
 #                pc_depth = np.array(pc_depth) #orgenized pc inside an array
                 pc_total = np.array(pc_total)
@@ -174,8 +178,9 @@ class Cam_YOLOdepth(Node):    # create node that detect yolo
 
           
                  #pose.data = -XZ_angle + 90
-                 pose.data = self.current_angle
-                 self.angle_pub.publish(pose)
+                 if new_angle > 0 and new_angle < 180:
+                  pose.data = self.current_angle
+                  self.angle_pub.publish(pose)
 
 
                  # draw rectangle:
@@ -187,7 +192,7 @@ class Cam_YOLOdepth(Node):    # create node that detect yolo
                               
                    
 
-         self.image_pub.publish(self.bridge.cv2_to_imgmsg(cv_image, "bgr8"))  #return to ros image
+                self.image_pub.publish(self.bridge.cv2_to_imgmsg(cv_image, "bgr8"))  #return to ros image
 
 
 def main(args=None):

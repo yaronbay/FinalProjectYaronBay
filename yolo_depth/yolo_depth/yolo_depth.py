@@ -16,6 +16,8 @@ import open3d as o3d
 from sklearn.cluster import DBSCAN
 from sklearn.preprocessing import StandardScaler
 from std_msgs.msg import Float64
+from geometry_msgs.msg import Point
+
 
 arduino = serial.Serial(port='/dev/ttyACM0',  baudrate=115200, timeout=.1)
 
@@ -26,7 +28,7 @@ class Cam_YOLOdepth(Node):    # create node that detect yolo
     def __init__(self):
        super().__init__("yolo_depth_node") 
 
-       self.model=YOLO('yolov8m.pt')    #create yolo nano model 
+       self.model=YOLO('yolov8n.pt')    #create yolo nano model 
        self.model.to('cuda')
 
        self.bridge = CvBridge()         #define cvbrige
@@ -34,7 +36,9 @@ class Cam_YOLOdepth(Node):    # create node that detect yolo
 
        self.image_pub = self.create_publisher(Image,"/image_depth_detection", 1 )       #create publisher to the picture that coming fron the camera 
 
-       self.angle_pub= self.create_publisher(Float64 , "/Camera_Angle", 1)      #create publisher that publishes the the angle the moter needs to move to
+       self.angle_pub = self.create_publisher(Float64 , "/Camera_Angle", 1)      #create publisher that publishes the the angle the moter needs to move to
+
+       self.center_pub_ = self.create_publisher(Point,"/person_coords" , 1 )
 
        self.image_sub = self.create_subscription(RGBD,"/camera/camera/rgbd",self.callback, 1 )  #create subcriber that retures information to the camera
 
@@ -105,18 +109,41 @@ class Cam_YOLOdepth(Node):    # create node that detect yolo
                 frame_center= rgb.width/2 , rgb.height/2
                 pc_depth = []
                 pc_total = []
-                for i in range(int(cords[2]-cords[0])):
+
+#                 for i in range(int(cords[2]-cords[0])):
+#                     for j in range(int(cords[3] - cords[1])):
+#                      pixel_dist_from_frame_center= np.sqrt((frame_center[0]- int(cords[0]) + i - 1)**2 + (frame_center[1] - int(cords[1]) + j -1)**2)
+#                      depth_coor = cv_depth[int(cords[0]) + i - 1 , int(cords[1]) + j - 1]
+#                      if depth_coor > 0: # and depth_coor > pixel_dist_from_frame_center: #ignore depths below 0
+#                          x=int(cords[0]) + i - 1
+#                          y=int(cords[1]) + j - 1
+#                          z= np.sqrt(depth_coor**2 - pixel_dist_from_frame_center**2)
+#                          #pc_depth.append([z]) # only depths of aray
+#                          pc_total.append([x , y , z])                       
+# #                pc_depth = np.array(pc_depth) #orgenized pc inside an array
+
+                for i in range(int(cords[2] - cords[0])):
                     for j in range(int(cords[3] - cords[1])):
-                     pixel_dist_from_frame_center= np.sqrt((frame_center[0]- int(cords[0]) + i - 1)**2 + (frame_center[1] - int(cords[1]) + j -1)**2)
-                     depth_coor = cv_depth[int(cords[0]) + i - 1 , int(cords[1]) + j - 1]
-                     if depth_coor > 0: # and depth_coor > pixel_dist_from_frame_center: #ignore depths below 0
-                         x=int(cords[0]) + i - 1
-                         y=int(cords[1]) + j - 1
-                         z= np.sqrt(depth_coor**2 - pixel_dist_from_frame_center**2)
-                         #pc_depth.append([z]) # only depths of aray
-                         pc_total.append([x , y , z])                       
-#                pc_depth = np.array(pc_depth) #orgenized pc inside an array
+                        pixel_dist_from_frame_center = np.sqrt((frame_center[0] - int(cords[0]) + i - 1)**2 + (frame_center[1] - int(cords[1]) + j - 1)**2)
+                        depth_coor = cv_depth[int(cords[0]) + i - 1, int(cords[1]) + j - 1]
+                        
+                        if depth_coor > 0:  # Ignore invalid depth values
+                            x = int(cords[0]) + i - 1
+                            y = int(cords[1]) + j - 1
+                            value_inside_sqrt = depth_coor**2 - pixel_dist_from_frame_center**2
+                            
+                            if value_inside_sqrt >= 0:
+                                z = np.sqrt(value_inside_sqrt)
+                            else:
+                                z = 0  # or continue to skip this point if negative value
+
+                            pc_total.append([x, y, z])
+
+
+
                 pc_total = np.array(pc_total)
+
+                #time.sleep(0.2)
 
                 pcd= o3d.geometry.PointCloud()  # create point cloud class 
                 pcd.points=o3d.utility.Vector3dVector(pc_total.reshape(-1,3))
@@ -161,6 +188,8 @@ class Cam_YOLOdepth(Node):    # create node that detect yolo
                 
                 center_of_mass= np.sum(labels_coordiantes, axis = 0) / np.size(indices)
 
+
+
                 pose=Float64()
                 
                 if np.isnan(center_of_mass).any():
@@ -174,25 +203,49 @@ class Cam_YOLOdepth(Node):    # create node that detect yolo
                  person_rel_angle = -XZ_angle + 90         # get angle relative to the to current coordinates systems 
                  angle_movement = person_rel_angle - 90    # how much movement was made sience the last iteration
                  new_angle = self.current_angle +angle_movement #get new angle relative to the world
-                 self.current_angle = new_angle                 # reset global integer current_angle
+
+                 if (new_angle > 180 or new_angle < 0):  # set to beggining if surpassed limits
+                      self.current_angle = 90
+                      pose.data = 90
+                      self.angle_pub.publish(pose)
+
+
+                 elif abs(new_angle-self.current_angle) > 5:  # define standat deviation for movement
+                
+                      
+                      self.current_angle = new_angle                 # reset global integer current_angle
+                 
+                 #self.current_angle = person_rel_angle
 
           
                  #pose.data = -XZ_angle + 90
-                 if new_angle > 0 and new_angle < 180:
-                  pose.data = self.current_angle
-                  self.angle_pub.publish(pose)
+                 #pose.data = person_rel_angle
+                      pose.data = new_angle
+                 #if new_angle > 0 and new_angle < 180:
+                  #pose.data = self.current_angle
+                 #self.angle_pub.publish(pose)
 
+                      self.angle_pub.publish(pose)
+                      
+
+                  #time.sleep(0.2)
+
+                 com_ = Point()
+                 com_.x = center_of_mass[0]
+                 com_.y = center_of_mass[1]
+                 com_.z = center_of_mass[2]
+                 self.center_pub_.publish(com_)
 
                  # draw rectangle:
-                cv2.rectangle(cv_image,(cords[0],cords[1]),(cords[2],cords[3]),(0,255,0),2)
-                cv2.putText(cv_image, text,(cords[0],cords[1]), cv2.FONT_HERSHEY_SIMPLEX, 1,(255,0,255),1,cv2.LINE_AA)             
-                #draw information:
-                cv2.circle(cv_image,(round(center_of_mass[0]),round(center_of_mass[1])),3,(0,0,255),1)
-                cv2.putText(cv_image, str(central_depth),(round(center_of_mass[0]),round(center_of_mass[1])), cv2.FONT_HERSHEY_SIMPLEX, 1,(0,0,255),1,cv2.LINE_AA)
+                 cv2.rectangle(cv_image,(cords[0],cords[1]),(cords[2],cords[3]),(0,255,0),2)
+                 cv2.putText(cv_image, text,(cords[0],cords[1]), cv2.FONT_HERSHEY_SIMPLEX, 1,(255,0,255),1,cv2.LINE_AA)             
+                 #draw information:
+                 cv2.circle(cv_image,(round(center_of_mass[0]),round(center_of_mass[1])),3,(0,0,255),1)
+                 cv2.putText(cv_image, str(central_depth),(round(center_of_mass[0]),round(center_of_mass[1])), cv2.FONT_HERSHEY_SIMPLEX, 1,(0,0,255),1,cv2.LINE_AA)
                               
                    
 
-                self.image_pub.publish(self.bridge.cv2_to_imgmsg(cv_image, "bgr8"))  #return to ros image
+                 self.image_pub.publish(self.bridge.cv2_to_imgmsg(cv_image, "bgr8"))  #return to ros image
 
 
 def main(args=None):

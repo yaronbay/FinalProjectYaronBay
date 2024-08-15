@@ -19,6 +19,7 @@ from std_msgs.msg import Float64
 from geometry_msgs.msg import Point
 
 
+
 arduino = serial.Serial(port='/dev/ttyACM0',  baudrate=115200, timeout=.1)
 
 
@@ -42,8 +43,6 @@ class Cam_YOLOdepth(Node):    # create node that detect yolo
 
        self.image_sub = self.create_subscription(RGBD,"/camera/camera/rgbd",self.callback, 1 )  #create subcriber that retures information to the camera
 
-
-       
     def callback(self, D_image: RGBD):
         
          rgb= D_image.rgb    #take only rbb part of the camera
@@ -205,8 +204,8 @@ class Cam_YOLOdepth(Node):    # create node that detect yolo
                  new_angle = self.current_angle +angle_movement #get new angle relative to the world
 
                  if (new_angle > 180 or new_angle < 0):  # set to beggining if surpassed limits
-                      self.current_angle = 90
-                      pose.data = 90
+                      self.current_angle = 90.0
+                      pose.data = 90.0
                       self.angle_pub.publish(pose)
 
 

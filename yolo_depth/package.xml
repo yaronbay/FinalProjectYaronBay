@@ -9,11 +9,16 @@
 
   <depend>rclpy</depend>
   <depend>sensor_msgs</depend>
-  <depend>opencv2</depend>
+  <depend>cv2</depend>
   <depend>cv_bridge</depend>
   <depend>ultralytics</depend>
   <depend>realsense2_camera_msgs</depend>
   <depend>pyrealsense2</depend>
+  <depend>geometry_msgs</depend>
+  <depend>std_msgs</depend>
+  <depend>open3d</depend>
+  <depend>serial</depend>
+
 
   <test_depend>ament_copyright</test_depend>
   <test_depend>ament_flake8</test_depend>

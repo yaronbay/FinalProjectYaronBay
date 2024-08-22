@@ -57,6 +57,9 @@ class CamAngle_driver(Node):    # create node that detect yolo
         #from here moving the arduino
         a=angle.data
 
+        # if a<0 or a>180:
+        #      a= 90
+
         servo_signal=str(a)
 
         # servo_signal="0" 
@@ -69,9 +72,9 @@ class CamAngle_driver(Node):    # create node that detect yolo
 
         # else  :
         #   servo_signal="0" #in every other senario stay steel
-        time.sleep(0.01)
+        #time.sleep(0.15)
         arduino.write(bytes(servo_signal,  'utf-8')) #send signal to arduino
-        time.sleep(0.05)
+        #time.sleep(0.15)
         print("motor position:", servo_signal) 
         servo_data = arduino.readline()
                

@@ -209,7 +209,7 @@ class Cam_YOLOdepth(Node):    # create node that detect yolo
                       self.angle_pub.publish(pose)
 
 
-                 elif abs(new_angle-self.current_angle) > 5:  # define standat deviation for movement
+                 if abs(new_angle-self.current_angle) > 5:  # define standat deviation for movement
                 
                       
                       self.current_angle = new_angle                 # reset global integer current_angle
